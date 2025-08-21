@@ -35,7 +35,19 @@
             ++ (pkgs.lib.optionals pkgs.stdenv.isDarwin
               [ pkgs.darwin.apple_sdk.frameworks.Security ]);
 
+          buildInputs = [
+            pkgs.mpich
+            pkgs.mpich-pmix
+            pkgs.llvm
+            pkgs.libclang.lib
+            pkgs.clang
+          ];
+
           RUSTFLAGS = (builtins.map (a: "-L ${a}/lib") [ pkgs.libgit2 ]);
+
+          shellHook = ''
+            export LIBCLANG_PATH=${pkgs.libclang.lib}/lib
+          '';
         };
       });
 }

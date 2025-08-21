@@ -13,7 +13,6 @@ build = "build.rs"
 zisk-common = { path = "../common" }
 executor = { path = "../executor" }
 zisk-witness = { path = "../witness-computation" }
-asm-runner = { path = "../emulator-asm/asm-runner" }
 
 proofman = { workspace = true }
 proofman-common = { workspace = true }

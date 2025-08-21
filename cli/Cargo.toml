@@ -35,7 +35,6 @@ executor = { path = "../executor" }
 rom-setup = { path = "../rom-setup" }
 zisk-core = { path = "../core" }
 zisk-pil = { path = "../pil" }
-asm-runner = { path = "../emulator-asm/asm-runner" }
 server = { path = "../server" }
 bytemuck = "1.23.1"
 

@@ -28,7 +28,6 @@ members = [
     "precompiles/keccakf",
     "precompiles/sha256f",
     "lib-c",
-    "emulator-asm/asm-runner",
     "ziskclib",
     "common",
     "tools/circuit",
@@ -78,3 +77,10 @@ named-sem = "0.2.2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 mpi = { version = "0.8.0" }
+
+svm-tracer = { path = "../svm-tracer/builder" }
+sbpf-elf-parser = { path = "../svm-tracer/loader" }
+mollusk-svm = { version = "0.4.0", features = ["invocation-inspect-callback"] }
+solana-program-runtime = "2.3"
+solana-sbpf = "0.11.1"
+solana-pubkey = "2.2"

@@ -1,5 +1,8 @@
 use std::mem;
 
+use svm_tracer::InstructionTraceBuilder;
+use mollusk_svm::Mollusk;
+
 use crate::{EmuContext, EmuFullTraceStep, EmuOptions, EmuRegTrace, ParEmuOptions};
 use fields::PrimeField64;
 use riscv::RiscVRegisters;
@@ -24,12 +27,12 @@ pub struct Emu<'a> {
     /// ZisK rom, containing the program to execute, which is constant for this program except for
     /// the input data
     pub rom: &'a ZiskRom,
+
+    /// svm runner
+    pub runner: Mollusk,
+
     /// Context, where the state of the execution is stored and modified at every execution step
     pub ctx: EmuContext,
-
-    // This array is used to store static data to avoid heap allocations and speed up the
-    // conversion of data to be written to the bus
-    static_array: [u64; MAX_OPERATION_DATA_SIZE],
 
     pub mem_helpers: MemHelpers,
 }
@@ -75,13 +78,13 @@ pub struct Emu<'a> {
 ///                     Emu::run_gen_trace(&mut self, options: &EmuOptions, par_options: &ParEmuOptions,) -> Vec<EmuTrace>
 ///                         Emu::par_step_my_block(&mut self, emu_full_trace_vec: &mut EmuTrace)
 ///                             Emu::source_a_mem_reads_generate(instruction, &mut emu_full_trace_vec.mem_reads);
-impl<'a> Emu<'a> {
-    pub fn new(rom: &ZiskRom, chunk_size: u64) -> Emu {
-        Emu {
+impl Emu<'a> {
+    pub fn new(runner: Mollusk, chunk_size: u64, rom: &'a ZiskRom) -> Self {
+        Self {
             rom,
+            runner,
             mem_helpers: MemHelpers::new(chunk_size),
             ctx: EmuContext::default(),
-            static_array: [0; MAX_OPERATION_DATA_SIZE],
         }
     }
 
@@ -89,8 +92,8 @@ impl<'a> Emu<'a> {
         rom: &'a ZiskRom,
         chunk_size: u64,
         trace_start: &'a EmuTraceStart,
-    ) -> Emu<'a> {
-        let mut emu = Emu::new(rom, chunk_size);
+    ) -> Emu {
+        let mut emu = Emu::new(rom, chunk_size, rom);
         emu.ctx.inst_ctx.pc = trace_start.pc;
         emu.ctx.inst_ctx.sp = trace_start.sp;
         emu.ctx.inst_ctx.step = trace_start.step;

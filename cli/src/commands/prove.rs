@@ -268,21 +268,6 @@ impl ZiskProve {
             )
             .expect("Failed to initialize proofman");
         }
-        let asm_services =
-            AsmServices::new(mpi_context.world_rank, mpi_context.local_rank, self.port);
-        let asm_runner_options = AsmRunnerOptions::new()
-            .with_verbose(self.verbose > 0)
-            .with_base_port(self.port)
-            .with_world_rank(mpi_context.world_rank)
-            .with_local_rank(mpi_context.local_rank)
-            .with_unlock_mapped_memory(self.unlock_mapped_memory);
-
-        if self.asm.is_some() {
-            // Start ASM microservices
-            tracing::info!(">>> [{}] Starting ASM microservices.", mpi_context.world_rank,);
-
-            asm_services.start_asm_services(self.asm.as_ref().unwrap(), asm_runner_options)?;
-        }
 
         let library =
             unsafe { Library::new(get_witness_computation_lib(self.witness_lib.as_ref()))? };
@@ -370,24 +355,9 @@ impl ZiskProve {
             }
 
             // Store the stats in stats.json
-            #[cfg(feature = "stats")]
-            {
-                _stats.lock().unwrap().add_stat(ExecutorStatsEnum::End(ExecutorStatsDuration {
-                    start_time: Instant::now(),
-                    duration: Duration::new(0, 1),
-                }));
-                _stats.lock().unwrap().store_stats();
-            }
         }
 
         proofman.set_barrier();
-
-        if self.asm.is_some() {
-            // Shut down ASM microservices
-            tracing::info!("<<< [{}] Shutting down ASM microservices.", mpi_context.world_rank);
-            asm_services.stop_asm_services()?;
-        }
-
         Ok(())
     }
 

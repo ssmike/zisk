@@ -156,10 +156,6 @@ pub struct ZiskExecutor<F: PrimeField64, BD: SMBundle<F>> {
     /// Map unlocked flag
     /// This is used to unlock the memory map for the ROM file.
     unlock_mapped_memory: bool,
-
-    asm_shmem_mt: Arc<Mutex<Option<PreloadedMT>>>,
-    asm_shmem_mo: Arc<Mutex<Option<PreloadedMO>>>,
-    asm_shmem_rh: Arc<Mutex<Option<PreloadedRH>>>,
 }
 
 impl<F: PrimeField64, BD: SMBundle<F>> ZiskExecutor<F, BD> {

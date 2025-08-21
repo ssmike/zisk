@@ -26,7 +26,10 @@ use std::{
 };
 use sysinfo::System;
 use zisk_common::EmuTrace;
-use zisk_core::{Riscv2zisk, ZiskRom};
+use zisk_core::ZiskRom;
+
+use svm_tracer::InstructionTraceBuilder;
+use mollusk_svm::Mollusk;
 
 pub trait Emulator {
     fn emulate(
@@ -63,113 +66,6 @@ impl ZiskEmulator {
         }
 
         Ok(Vec::new())
-    }
-
-    /// Processes an RISC-V ELF file
-    fn process_elf_file(
-        elf_filename: String,
-        inputs: &[u8],
-        options: &EmuOptions,
-        callback: Option<impl Fn(EmuTrace)>,
-    ) -> Result<Vec<u8>, ZiskEmulatorErr> {
-        if options.verbose {
-            println!("process_elf_file() elf_file={elf_filename}");
-        }
-
-        // Create an instance of the RISC-V -> ZisK program transpiler (Riscv2zisk) with the ELF
-        // file name
-        let riscv2zisk = Riscv2zisk::new(elf_filename);
-
-        // Convert the ELF file to ZisK ROM calling the transpiler run() method
-        let zisk_rom = riscv2zisk.run().map_err(|err| ZiskEmulatorErr::Unknown(err.to_string()))?;
-
-        // Process the Zisk rom with the provided inputs, according to the configured options
-        Self::process_rom(&zisk_rom, inputs, options, callback)
-    }
-
-    // To be implemented
-    fn process_rom_file(
-        rom_filename: String,
-        inputs: &[u8],
-        options: &EmuOptions,
-        callback: Option<impl Fn(EmuTrace)>,
-    ) -> Result<Vec<u8>, ZiskEmulatorErr> {
-        if options.verbose {
-            println!("process_rom_file() rom_file={rom_filename}");
-        }
-
-        // TODO: load from file
-        let rom: ZiskRom = ZiskRom::default();
-        Self::process_rom(&rom, inputs, options, callback)
-    }
-
-    /// Processes a Zisk rom with the provided inputs, according to the configured options
-    pub fn process_rom(
-        rom: &ZiskRom,
-        inputs: &[u8],
-        options: &EmuOptions,
-        callback: Option<impl Fn(EmuTrace)>,
-    ) -> Result<Vec<u8>, ZiskEmulatorErr> {
-        if options.verbose {
-            println!("process_rom() rom size={} inputs size={}", rom.insts.len(), inputs.len());
-        }
-
-        // Create a emulator instance with the Zisk rom
-        let mut emu = Emu::new(rom, options.chunk_size.unwrap_or(1u64 << 18));
-
-        // Get the current time, to be used to calculate the metrics
-        let start = Instant::now();
-
-        // Run the emulation, using the input and the options
-        emu.run(inputs.to_owned(), options, callback);
-
-        // Check that the emulation completed, either successfully or not, but it must reach the end
-        // of the program
-        if !emu.terminated() {
-            return Err(ZiskEmulatorErr::EmulationNoCompleted);
-        }
-
-        // Store the duration of the emulation process as a difference vs. the start time
-        let duration = start.elapsed();
-
-        // Log performance metrics
-        if options.log_metrics {
-            let secs = duration.as_secs_f64();
-            let steps = emu.number_of_steps();
-            let tp = steps as f64 / secs / 1_000_000.0;
-
-            let system = System::new_all();
-            let cpu = &system.cpus()[0];
-            let cpu_frequency = cpu.frequency() as f64;
-
-            let clocks_per_step = cpu_frequency / tp;
-            println!(
-                "process_rom() steps={steps} duration={secs:.4} tp={tp:.4} Msteps/s freq={cpu_frequency:.4} {clocks_per_step:.4} clocks/step"
-            );
-        }
-
-        // Get the emulation output
-        let output = emu.get_output_8();
-
-        // OUTPUT:
-        // Save output to a file if requested
-        if options.output.is_some() {
-            fs::write(options.output.as_ref().unwrap(), &output)
-                .map_err(|e| ZiskEmulatorErr::Unknown(e.to_string()))?
-        }
-
-        // Log output to console if requested
-        if options.log_output {
-            // Get the emulation output as a u32 vector
-            let output = emu.get_output_32();
-
-            // Log the output to console
-            for o in &output {
-                println!("{o:08x}");
-            }
-        }
-
-        Ok(output)
     }
 
     /// EXECUTE phase
