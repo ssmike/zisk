@@ -163,17 +163,22 @@ impl ZiskRom {
         } else if BPF_LMUL & op.opc != 0 {
             "mulu"
         } else if BPF_SHMUL & op.opc != 0 {
-            "shmul"
+            "mulsuh"
+        } else if BPF_SHMUL & op.opc != 0 {
+            "muluh"
         } else {
             ""
         };
+
+        let reg_for_bpf_reg = |reg: u8| BASE_REG + reg as u64;
+        let ireg_for_bpf_reg = |reg: u8| (BASE_REG + reg as u64) as i64;
 
         match op.opc {
             LD_DW_IMM => vec![
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
                     builder.src_b("imm", op.imm as u64, false);
-                    builder.store("reg", BASE_REG as i64 + op.dst as i64, false, false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("copyb");
                     builder.i
                 },
@@ -187,7 +192,7 @@ impl ZiskRom {
                 vec![
                     {
                         let mut builder = ZiskInstBuilder::new(pc);
-                        builder.src_b("reg", BASE_REG + op.src as u64, false);
+                        builder.src_b("reg", reg_for_bpf_reg(op.src), false);
                         builder.store("reg", SCRATCH_REG as i64, false, false);
                         builder.op("copyb");
                         builder.i
@@ -204,7 +209,7 @@ impl ZiskRom {
                         let mut builder = ZiskInstBuilder::new(pc + 2);
                         builder.src_a("reg", SCRATCH_REG, false);
                         builder.src_b("ind", op.off.try_into().unwrap(), false);
-                        builder.store("reg", (BASE_REG + op.dst as u64) as i64, false, false);
+                        builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                         builder.op("copyb");
                         builder.ind_width(width);
                         builder.i
@@ -214,9 +219,9 @@ impl ZiskRom {
                 vec![
                     {
                         let mut builder = ZiskInstBuilder::new(pc);
-                        builder.src_a("reg", BASE_REG + op.src as u64, false);
+                        builder.src_a("reg", reg_for_bpf_reg(op.src), false);
                         builder.src_b("ind", op.off.try_into().unwrap(), false);
-                        builder.store("reg", (BASE_REG + op.dst as u64) as i64, false, false);
+                        builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                         builder.op("copyb");
                         builder.ind_width(width);
                         builder.i
@@ -231,7 +236,7 @@ impl ZiskRom {
            ST_1B_IMM | ST_2B_IMM | ST_4B_IMM | ST_8B_IMM | ST_B_IMM | ST_H_IMM | ST_W_IMM | ST_DW_IMM => vec![ 
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
-                    builder.src_a("reg", BASE_REG + op.src as u64, false);
+                    builder.src_a("reg", reg_for_bpf_reg(op.src), false);
                     builder.src_b("imm", op.imm as u64, false);
                     builder.store("ind", op.off.into(), false, false);
                     builder.op("copyb");
@@ -247,8 +252,8 @@ impl ZiskRom {
             ST_1B_REG | ST_2B_REG | ST_4B_REG | ST_8B_REG | ST_B_REG | ST_H_REG | ST_W_REG | ST_DW_REG => vec![
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
-                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
-                    builder.src_b("reg", BASE_REG + op.src as u64, false);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.src), false);
                     builder.store("ind", op.off.into(), false, false);
                     builder.op("copyb");
                     builder.ind_width(width);
@@ -283,12 +288,15 @@ impl ZiskRom {
             // BPF opcode: `rsh64 dst, imm` /// `dst >>= imm`.
             // BPF opcode: `arsh64 dst, imm` /// `dst >>= imm (arithmetic)`.
             // BPF opcode: `lmul64 dst, imm` /// `dst = (dst * imm) as u64`.
-            LMUL64_IMM | ARSH64_IMM | LSH64_IMM | RSH64_IMM | OR64_IMM | XOR64_IMM | AND64_IMM | MUL64_IMM | ADD64_IMM | ARSH32_IMM | MUL32_IMM | RSH32_IMM | LSH32_IMM | ADD32_IMM => vec![
+            // BPF opcode: `shmul64 dst, imm` /// `dst = (dst * imm) >> 64`.
+            // BPF opcode: `uhmul64 dst, imm` /// `dst = (dst * imm) >> 64`.
+            UHMUL64_IMM | SHMUL64_IMM | LMUL64_IMM | ARSH64_IMM | LSH64_IMM | RSH64_IMM | OR64_IMM | XOR64_IMM | AND64_IMM | MUL64_IMM | ADD64_IMM |
+            ARSH32_IMM | MUL32_IMM | RSH32_IMM | LSH32_IMM | ADD32_IMM => vec![
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
-                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst) as u64, false);
                     builder.src_b("imm", op.imm as u64, false);
-                    builder.store("reg", op.dst as i64, false, false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op(arith_op);
                     builder.i
                 },
@@ -325,14 +333,16 @@ impl ZiskRom {
             // BPF opcode: `sub64 dst, src` /// `dst -= src`.
             // BPF opcode: `sub32 dst, src` /// `dst -= src`.
             // BPF opcode: `lmul64 dst, src` /// `dst = (dst * src) as u64`.
-            LMUL64_REG | SUB32_REG | SUB64_REG | ARSH64_REG | UREM64_REG | SREM64_REG | LSH64_REG | RSH64_REG | OR64_REG | XOR64_REG
+            // BPF opcode: `shmul64 dst, src` /// `dst = (dst * src) >> 64`.
+            // BPF opcode: `uhmul64 dst, src` /// `dst = (dst * src) >> 64`.
+            UHMUL64_REG | SHMUL64_REG | LMUL64_REG | SUB32_REG | SUB64_REG | ARSH64_REG | UREM64_REG | SREM64_REG | LSH64_REG | RSH64_REG | OR64_REG | XOR64_REG
                 | AND64_REG | MUL64_REG | ADD64_REG | ARSH32_REG | LSH32_REG | RSH32_REG
                 | MUL32_REG | DIV32_REG | ADD32_REG => vec![
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
-                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
-                    builder.src_b("reg", BASE_REG + op.src as u64, false);
-                    builder.store("reg", op.dst as i64, false, false);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.src), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op(arith_op);
                     builder.i
                 },
@@ -346,8 +356,8 @@ impl ZiskRom {
                     {
                         let mut builder = ZiskInstBuilder::new(pc);
                         builder.src_a("imm", op.imm as u64, false);
-                        builder.src_b("reg", BASE_REG + op.dst as u64, false);
-                        builder.store("reg", op.dst as i64, false, false);
+                        builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                        builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                         builder.op(arith_op);
                         builder.i
                     },
@@ -357,9 +367,9 @@ impl ZiskRom {
                 vec![
                     {
                         let mut builder = ZiskInstBuilder::new(pc);
-                        builder.src_a("reg", BASE_REG + op.dst as u64, false);
+                        builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
                         builder.src_b("imm", op.imm as u64, false);
-                        builder.store("reg", op.dst as i64, false, false);
+                        builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                         builder.op(arith_op);
                         builder.i
                     },
@@ -374,30 +384,32 @@ impl ZiskRom {
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
                     builder.src_a("imm", mask, false);
-                    builder.src_b("reg", BASE_REG + op.src as u64, false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.src), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.src), false, false);
                     builder.op("and");
                     builder.i
                 },
                 {
                     let mut builder = ZiskInstBuilder::new(pc + 1);
                     builder.src_a("imm", mask, false);
-                    builder.src_b("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("and");
                     builder.i
                 },
                 {
                     let mut builder = ZiskInstBuilder::new(pc + 2);
-                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
-                    builder.src_b("reg", BASE_REG + op.src as u64, false);
-                    builder.store("reg", op.dst as i64, false, false);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.src), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op(arith_op);
                     builder.i
                 },
                 {
                     let mut builder = ZiskInstBuilder::new(pc + 3);
-                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
                     builder.src_b("imm", mask, false);
-                    builder.store("reg", op.dst as i64, false, false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("and");
                     builder.i
                 }
@@ -411,63 +423,116 @@ impl ZiskRom {
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
                     builder.src_a("imm", mask, false);
-                    builder.src_b("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("and");
                     builder.i
                 },
                 {
                     let mut builder = ZiskInstBuilder::new(pc + 1);
                     builder.src_a("imm", op.imm as u64 & mask, false);
-                    builder.src_b("reg", BASE_REG + op.src as u64, false);
-                    builder.store("reg", op.dst as i64, false, false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.src), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op(arith_op);
                     builder.i
                 },
                 {
                     let mut builder = ZiskInstBuilder::new(pc + 2);
-                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
                     builder.src_b("imm", mask, false);
-                    builder.store("reg", op.dst as i64, false, false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("and");
                     builder.i
                 }
             ],
 
-            // BPF opcode: `uhmul64 dst, src` /// `dst = (dst * src) >> 64`.
-            // BPF opcode: `shmul64 dst, src` /// `dst = (dst * src) >> 64`.
-            UHMUL64_REG | SHMUL64_REG => vec![
-            ],
-
-            // BPF opcode: `uhmul64 dst, imm` /// `dst = (dst * imm) >> 64`.
-            // BPF opcode: `shmul64 dst, imm` /// `dst = (dst * imm) >> 64`.
-            UHMUL64_IMM | SHMUL64_IMM => vec![
-            ],
-
             // BPF opcode: `hor64 dst, imm` /// `dst |= imm << 32`.
-            HOR64_IMM => vec![],
+            HOR64_IMM => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.src_b("imm", (op.imm as u64).wrapping_shl(32), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
+                    builder.op("or");
+                    builder.i
+                }
+            ],
 
-            /// BPF opcode: `shmul32 dst, imm` /// `dst = (dst * imm) as i64`.
+            // hopefully disabled
+            // BPF opcode: `shmul32 dst, imm` /// `dst = (dst * imm) as i64`.
             // SHMUL32_IMM
-            /// BPF opcode: `shmul32 dst, src` /// `dst = (dst * src) as i64`.
+            // BPF opcode: `shmul32 dst, src` /// `dst = (dst * src) as i64`.
             // SHMUL32_REG
 
             // BPF opcode: `mov64 dst, src` /// `dst = src`.
-            MOV64_REG
+            MOV64_REG => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_b("reg", reg_for_bpf_reg(op.src), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
+                    builder.op("copyb");
+                    builder.i
+                }
+            ],
+
             // BPF opcode: `mov64 dst, imm` /// `dst = imm`.
-            MOV64_IMM
+            MOV64_IMM => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_b("imm", op.imm as u64, false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
+                    builder.op("copyb");
+                    builder.i
+                }
+            ],
+
             // BPF opcode: `mov32 dst, imm` /// `dst = imm`.
-            MOV32_IMM
+            MOV32_IMM  => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_b("imm", op.imm as u64 & mask, false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
+                    builder.op("copyb");
+                    builder.i
+                }
+            ],
+
             // BPF opcode: `mov32 dst, src` /// `dst = src`.
-            MOV32_REG
+            MOV32_REG => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("imm", mask, false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.src), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.src), false, false);
+                    builder.op("and");
+                    builder.i
+                },
+                {
+                    let mut builder = ZiskInstBuilder::new(pc + 1);
+                    builder.src_b("reg", reg_for_bpf_reg(op.src), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
+                    builder.op("copyb");
+                    builder.i
+                }
+            ],
+
             // BPF opcode: `neg32 dst` /// `dst = -dst`.
-            NEG32
+            // BPF opcode: `neg64 dst` /// `dst = -dst`.
+            NEG32 | NEG64 => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc + 1);
+                    builder.src_a("imm", 0, false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
+                    builder.op(if op.opc == NEG32 { "sub_w" } else { "sub" });
+                    builder.i
+                }
+            ],
 
             // BPF opcode: `le dst` /// `dst = htole<imm>(dst), with imm in {16, 32, 64}`.
             LE
             // BPF opcode: `be dst` /// `dst = htobe<imm>(dst), with imm in {16, 32, 64}`.
             BE
-            // BPF opcode: `neg64 dst` /// `dst = -dst`.
-            NEG64
 
             // BPF opcode: `ja +off` /// `PC += off`.
             JA
