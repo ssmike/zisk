@@ -533,7 +533,6 @@ impl ZiskRom {
             LE
             // BPF opcode: `be dst` /// `dst = htobe<imm>(dst), with imm in {16, 32, 64}`.
             BE
-
             // BPF opcode: `ja +off` /// `PC += off`.
             JA
             // BPF opcode: `jeq dst, imm, +off` /// `PC += off if dst == imm`.
