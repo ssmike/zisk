@@ -92,23 +92,12 @@ impl ZiskRom {
             } else {
                 "mul"
             }
-        //} else if BPF_LMUL & op.opc != 0 {
-        //    if BPF_ALU32_LOAD & op.opc != 0 {
-        //        "lmul_w"
-        //    } else {
-        //        "lmul"
-        //    }
-        //} else if BPF_UHMUL & op.opc != 0 {
-        //    "uhmul"
-        //} else if BPF_UDIV & op.opc != 0 {
-        //  "uhmul"
         } else if BPF_ADD & op.opc != 0 {
             if BPF_ALU32_LOAD & op.opc != 0 {
                 "add_w"
             } else {
                 "add"
             }
-
         } else if BPF_OR & op.opc != 0 {
             "or"
         } else if BPF_XOR & op.opc != 0 {
@@ -134,12 +123,6 @@ impl ZiskRom {
             } else {
                 "divu"
             }
-
-        } else if BPF_LSH & op.opc != 0 {
-            "lsh"
-        } else if BPF_RSH & op.opc != 0 {
-            "rsh"
-
         } else if BPF_MOD & op.opc != 0 {
             if BPF_ALU32_LOAD & op.opc != 0 {
                 "rem_w"
@@ -158,8 +141,27 @@ impl ZiskRom {
             } else {
                 "rem"
             }
-        } else if BPF_HOR & op.opc != 0 {
-            "hor"
+
+        } else if BPF_LSH & op.opc != 0 {
+            if BPF_ALU32_LOAD & op.opc != 0 {
+                "sll_w"
+            } else {
+                "sll"
+            }
+        } else if BPF_RSH & op.opc != 0 {
+            if BPF_ALU32_LOAD & op.opc != 0 {
+                "srl_w"
+            } else {
+                "srl"
+            }
+        } else if BPF_ARSH & op.opc != 0 {
+            if BPF_ALU32_LOAD & op.opc != 0 {
+                "sra_w"
+            } else {
+                "sra"
+            }
+        } else if BPF_LMUL & op.opc != 0 {
+            "mulu"
         } else if BPF_SHMUL & op.opc != 0 {
             "shmul"
         } else {
@@ -270,7 +272,6 @@ impl ZiskRom {
             MOD32_IMM | SREM32_IMM | UREM32_IMM | UREM64_IMM | SREM64_IMM | MOD64_IMM | DIV64_IMM | UDIV64_IMM | SDIV64_IMM | UDIV32_IMM | DIV32_IMM | SDIV32_IMM |
             // BPF opcode: `add32 dst, imm` /// `dst += imm`.
             // BPF opcode: `mul32 dst, imm` /// `dst *= imm`.
-            // BPF opcode: `lmul32 dst, imm` /// `dst *= (dst * imm) as u32`.
             // BPF opcode: `lsh32 dst, imm` /// `dst <<= imm`.
             // BPF opcode: `rsh32 dst, imm` /// `dst >>= imm`.
             // BPF opcode: `arsh32 dst, imm` /// `dst >>= imm (arithmetic)`.
@@ -281,8 +282,8 @@ impl ZiskRom {
             // BPF opcode: `lsh64 dst, imm` /// `dst <<= imm`.
             // BPF opcode: `rsh64 dst, imm` /// `dst >>= imm`.
             // BPF opcode: `arsh64 dst, imm` /// `dst >>= imm (arithmetic)`.
-            // BPF opcode: `hor64 dst, imm` /// `dst |= imm << 32`.
-            ARSH64_IMM | HOR64_IMM | LSH64_IMM | RSH64_IMM | OR64_IMM | XOR64_IMM | AND64_IMM | MUL64_IMM | ADD64_IMM | ARSH32_IMM | MUL32_IMM | LMUL32_IMM | RSH32_IMM | LSH32_IMM | ADD32_IMM => vec![
+            // BPF opcode: `lmul64 dst, imm` /// `dst = (dst * imm) as u64`.
+            LMUL64_IMM | ARSH64_IMM | LSH64_IMM | RSH64_IMM | OR64_IMM | XOR64_IMM | AND64_IMM | MUL64_IMM | ADD64_IMM | ARSH32_IMM | MUL32_IMM | RSH32_IMM | LSH32_IMM | ADD32_IMM => vec![
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
                     builder.src_a("reg", BASE_REG + op.dst as u64, false);
@@ -323,7 +324,8 @@ impl ZiskRom {
             // BPF opcode: `arsh64 dst, src` /// `dst >>= src (arithmetic)`.
             // BPF opcode: `sub64 dst, src` /// `dst -= src`.
             // BPF opcode: `sub32 dst, src` /// `dst -= src`.
-            SUB32_REG | SUB64_REG | ARSH64_REG | UREM64_REG | SREM64_REG | LSH64_REG | RSH64_REG | OR64_REG | XOR64_REG
+            // BPF opcode: `lmul64 dst, src` /// `dst = (dst * src) as u64`.
+            LMUL64_REG | SUB32_REG | SUB64_REG | ARSH64_REG | UREM64_REG | SREM64_REG | LSH64_REG | RSH64_REG | OR64_REG | XOR64_REG
                 | AND64_REG | MUL64_REG | ADD64_REG | ARSH32_REG | LSH32_REG | RSH32_REG
                 | MUL32_REG | DIV32_REG | ADD32_REG => vec![
                 {
@@ -367,7 +369,8 @@ impl ZiskRom {
             // BPF opcode: `xor32 dst, src` /// `dst ^= src`.
             // BPF opcode: `or32 dst, src` /// `dst |= src`.
             // BPF opcode: `and32 dst, src` /// `dst &= src`.
-            OR32_REG | XOR32_REG | AND32_REG => vec![
+            // BPF opcode: `lmul32 dst, src` /// `dst *= (dst * src) as u32`.
+            LMUL32_REG | OR32_REG | XOR32_REG | AND32_REG => vec![
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
                     builder.src_a("imm", mask, false);
@@ -389,13 +392,22 @@ impl ZiskRom {
                     builder.store("reg", op.dst as i64, false, false);
                     builder.op(arith_op);
                     builder.i
+                },
+                {
+                    let mut builder = ZiskInstBuilder::new(pc + 3);
+                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_b("imm", mask, false);
+                    builder.store("reg", op.dst as i64, false, false);
+                    builder.op("and");
+                    builder.i
                 }
             ],
 
             // BPF opcode: `or32 dst, imm` /// `dst |= imm`.
             // BPF opcode: `and32 dst, imm` /// `dst &= imm`.
             // BPF opcode: `xor32 dst, imm` /// `dst ^= imm`.
-            XOR32_IMM | AND32_IMM | OR32_IMM => vec![
+            // BPF opcode: `lmul32 dst, imm` /// `dst *= (dst * imm) as u32`.
+            LMUL32_IMM | XOR32_IMM | AND32_IMM | OR32_IMM => vec![
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
                     builder.src_a("imm", mask, false);
@@ -410,19 +422,29 @@ impl ZiskRom {
                     builder.store("reg", op.dst as i64, false, false);
                     builder.op(arith_op);
                     builder.i
+                },
+                {
+                    let mut builder = ZiskInstBuilder::new(pc + 2);
+                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_b("imm", mask, false);
+                    builder.store("reg", op.dst as i64, false, false);
+                    builder.op("and");
+                    builder.i
                 }
             ],
 
-
-            // BPF opcode: `lmul32 dst, src` /// `dst *= (dst * src) as u32`.
-            // BPF opcode: `lmul64 dst, src` /// `dst = (dst * src) as u64`.
-            // BPF opcode: `lmul64 dst, imm` /// `dst = (dst * imm) as u64`.
-            // BPF opcode: `shmul64 dst, src` /// `dst = (dst * src) >> 64`.
-            // BPF opcode: `uhmul64 dst, imm` /// `dst = (dst * imm) >> 64`.
             // BPF opcode: `uhmul64 dst, src` /// `dst = (dst * src) >> 64`.
-            // BPF opcode: `shmul64 dst, imm` /// `dst = (dst * imm) >> 64`.
-            LMUL64_IMM | UHMUL64_IMM | SHMUL64_IMM | UHMUL64_REG | SHMUL64_REG | LMUL32_REG | LMUL64_REG => vec![],
+            // BPF opcode: `shmul64 dst, src` /// `dst = (dst * src) >> 64`.
+            UHMUL64_REG | SHMUL64_REG => vec![
+            ],
 
+            // BPF opcode: `uhmul64 dst, imm` /// `dst = (dst * imm) >> 64`.
+            // BPF opcode: `shmul64 dst, imm` /// `dst = (dst * imm) >> 64`.
+            UHMUL64_IMM | SHMUL64_IMM => vec![
+            ],
+
+            // BPF opcode: `hor64 dst, imm` /// `dst |= imm << 32`.
+            HOR64_IMM => vec![],
 
             /// BPF opcode: `shmul32 dst, imm` /// `dst = (dst * imm) as i64`.
             // SHMUL32_IMM
