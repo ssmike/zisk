@@ -117,8 +117,11 @@ impl ZiskRom {
             "and"
 
         } else if BPF_SUB & op.opc != 0 {
-            "sub"
-
+            if BPF_ALU32_LOAD & op.opc != 0 {
+                "sub_w"
+            } else {
+                "sub"
+            }
         } else if BPF_SDIV & op.opc != 0 {
             if BPF_ALU32_LOAD & op.opc != 0 {
                 "div_w"
@@ -138,13 +141,23 @@ impl ZiskRom {
             "rsh"
 
         } else if BPF_MOD & op.opc != 0 {
-            "mod"
+            if BPF_ALU32_LOAD & op.opc != 0 {
+                "rem_w"
+            } else {
+                "rem"
+            }
         } else if BPF_UREM & op.opc != 0 {
-            "urem"
+            if BPF_ALU32_LOAD & op.opc != 0 {
+                "remu_w"
+            } else {
+                "remu"
+            }
         } else if BPF_SREM & op.opc != 0 {
-            "srem"
-
-
+            if BPF_ALU32_LOAD & op.opc != 0 {
+                "rem_w"
+            } else {
+                "rem"
+            }
         } else if BPF_HOR & op.opc != 0 {
             "hor"
         } else if BPF_SHMUL & op.opc != 0 {
@@ -247,17 +260,19 @@ impl ZiskRom {
             // BPF opcode: `udiv64 dst, imm` /// `dst /= imm`.
             // BPF opcode: `sdiv64 dst, imm` /// `dst /= imm`.
             // BPF opcode: `div32 dst, imm` /// `dst /= imm`.
-            DIV64_IMM | UDIV64_IMM | SDIV64_IMM | UDIV32_IMM | DIV32_IMM | SDIV32_IMM => vec![
-            ],
-
+            // BPF opcode: `mod64 dst, imm` /// `dst %= imm`.
+            // BPF opcode: `urem64 dst, imm` /// `dst %= imm`.
+            // BPF opcode: `srem64 dst, imm` /// `dst %= imm`.
+            // BPF opcode: `urem32 dst, imm` /// `dst %= imm`.
+            // BPF opcode: `srem32 dst, imm` /// `dst %= imm`.
+            // BPF opcode: `mod32 dst, imm` /// `dst %= imm`.
+            // these are equivalent to zisk counterparts because we validate execution via real sbpf
+            MOD32_IMM | SREM32_IMM | UREM32_IMM | UREM64_IMM | SREM64_IMM | MOD64_IMM | DIV64_IMM | UDIV64_IMM | SDIV64_IMM | UDIV32_IMM | DIV32_IMM | SDIV32_IMM |
             // BPF opcode: `add32 dst, imm` /// `dst += imm`.
             // BPF opcode: `mul32 dst, imm` /// `dst *= imm`.
             // BPF opcode: `lmul32 dst, imm` /// `dst *= (dst * imm) as u32`.
             // BPF opcode: `lsh32 dst, imm` /// `dst <<= imm`.
             // BPF opcode: `rsh32 dst, imm` /// `dst >>= imm`.
-            // BPF opcode: `urem32 dst, imm` /// `dst %= imm`.
-            // BPF opcode: `srem32 dst, imm` /// `dst %= imm`.
-            // BPF opcode: `mod32 dst, imm` /// `dst %= imm`.
             // BPF opcode: `arsh32 dst, imm` /// `dst >>= imm (arithmetic)`.
             // BPF opcode: `add64 dst, imm` /// `dst += imm`.
             // BPF opcode: `mul64 dst, imm` /// `dst *= imm`.
@@ -266,17 +281,12 @@ impl ZiskRom {
             // BPF opcode: `lsh64 dst, imm` /// `dst <<= imm`.
             // BPF opcode: `rsh64 dst, imm` /// `dst >>= imm`.
             // BPF opcode: `arsh64 dst, imm` /// `dst >>= imm (arithmetic)`.
-            // BPF opcode: `mod64 dst, imm` /// `dst %= imm`.
             // BPF opcode: `hor64 dst, imm` /// `dst |= imm << 32`.
-            // BPF opcode: `urem64 dst, imm` /// `dst %= imm`.
-            // BPF opcode: `srem64 dst, imm` /// `dst %= imm`.
-            MOD64_IMM | ARSH64_IMM | HOR64_IMM | UREM64_IMM | SREM64_IMM | LSH64_IMM | RSH64_IMM | OR64_IMM
-                | XOR64_IMM | AND64_IMM | MUL64_IMM | ADD64_IMM | ARSH32_IMM | MOD32_IMM | SREM32_IMM | UREM32_IMM | MUL32_IMM | LMUL32_IMM | RSH32_IMM
-                | LSH32_IMM | ADD32_IMM => vec![
+            ARSH64_IMM | HOR64_IMM | LSH64_IMM | RSH64_IMM | OR64_IMM | XOR64_IMM | AND64_IMM | MUL64_IMM | ADD64_IMM | ARSH32_IMM | MUL32_IMM | LMUL32_IMM | RSH32_IMM | LSH32_IMM | ADD32_IMM => vec![
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
-                    builder.src_a("reg", op.imm as u64, false);
-                    builder.src_b("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_b("imm", op.imm as u64, false);
                     builder.store("reg", op.dst as i64, false, false);
                     builder.op(arith_op);
                     builder.i
@@ -289,16 +299,18 @@ impl ZiskRom {
             // BPF opcode: `div32 dst, src` /// `dst /= src`.
             // BPF opcode: `sdiv32 dst, src` /// `dst /= src`.
             // BPF opcode: `udiv32 dst, src` /// `dst /= src`.
-            DIV64_REG | UDIV64_REG | SDIV64_REG | SDIV32_REG | SDIV32_REG => vec![
-            ],
-
+            // BPF opcode: `urem32 dst, src` /// `dst %= src`.
+            // BPF opcode: `srem32 dst, src` /// `dst %= src`.
+            // BPF opcode: `mod32 dst, src` /// `dst %= src`.
+            // BPF opcode: `mod64 dst, src` /// `dst %= src`.
+            // BPF opcode: `urem64 dst, src` /// `dst %= src`.
+            // BPF opcode: `srem64 dst, src` /// `dst %= src`.
+            // these are equivalent to zisk counterparts because we validate execution via real sbpf
+            MOD64_REG | MOD32_REG | SREM32_REG | UREM32_REG | UDIV32_REG | DIV64_REG | UDIV64_REG | SDIV64_REG | SDIV32_REG | SDIV32_REG |
             // BPF opcode: `add32 dst, src` /// `dst += src`.
             // BPF opcode: `mul32 dst, src` /// `dst *= src`.
             // BPF opcode: `lsh32 dst, src` /// `dst <<= src`.
             // BPF opcode: `rsh32 dst, src` /// `dst >>= src`.
-            // BPF opcode: `urem32 dst, src` /// `dst %= src`.
-            // BPF opcode: `srem32 dst, src` /// `dst %= src`.
-            // BPF opcode: `mod32 dst, src` /// `dst %= src`.
             // BPF opcode: `add64 dst, src` /// `dst += src`.
             // BPF opcode: `and64 dst, imm` /// `dst &= imm`.
             // BPF opcode: `mul64 dst, src` /// `dst *= src`.
@@ -308,18 +320,16 @@ impl ZiskRom {
             // BPF opcode: `lsh64 dst, src` /// `dst <<= src`.
             // BPF opcode: `rsh64 dst, src` /// `dst >>= src`.
             // BPF opcode: `arsh32 dst, src` /// `dst >>= src (arithmetic)`.
-            // BPF opcode: `mod64 dst, src` /// `dst %= src`.
-            // BPF opcode: `mov64 dst, src` /// `dst = src`.
             // BPF opcode: `arsh64 dst, src` /// `dst >>= src (arithmetic)`.
-            // BPF opcode: `urem64 dst, src` /// `dst %= src`.
-            // BPF opcode: `srem64 dst, src` /// `dst %= src`.
-            MOD64_REG | MOV64_REG | ARSH64_REG | UREM64_REG | SREM64_REG | LSH64_REG | RSH64_REG | OR64_REG | XOR64_REG
-                | AND64_REG | MUL64_REG | ADD64_REG | ARSH32_REG | MOD32_REG | SREM32_REG | UREM32_REG | UDIV32_REG | LSH32_REG | RSH32_REG
+            // BPF opcode: `sub64 dst, src` /// `dst -= src`.
+            // BPF opcode: `sub32 dst, src` /// `dst -= src`.
+            SUB32_REG | SUB64_REG | ARSH64_REG | UREM64_REG | SREM64_REG | LSH64_REG | RSH64_REG | OR64_REG | XOR64_REG
+                | AND64_REG | MUL64_REG | ADD64_REG | ARSH32_REG | LSH32_REG | RSH32_REG
                 | MUL32_REG | DIV32_REG | ADD32_REG => vec![
                 {
                     let mut builder = ZiskInstBuilder::new(pc);
-                    builder.src_a("reg", BASE_REG + op.src as u64, false);
-                    builder.src_b("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_b("reg", BASE_REG + op.src as u64, false);
                     builder.store("reg", op.dst as i64, false, false);
                     builder.op(arith_op);
                     builder.i
@@ -327,19 +337,81 @@ impl ZiskRom {
             ],
 
             // BPF opcode: `sub64 dst, imm` /// `dst -= imm`.
-            // BPF opcode: `sub64 dst, src` /// `dst -= src`.
-            // BPF opcode: `sub32 dst, src` /// `dst -= src`.
             // BPF opcode: `sub32 dst, imm` /// `dst = imm - dst`.
-            SUB32_REG | SUB32_IMM | SUB64_IMM | SUB64_REG => vec![],
+            SUB32_IMM | SUB64_IMM => if version.swap_sub_reg_imm_operands() {
+                // self.reg[dst] =  (insn.imm as u64).wrapping_sub(self.reg[dst])
+                vec![
+                    {
+                        let mut builder = ZiskInstBuilder::new(pc);
+                        builder.src_a("imm", op.imm as u64, false);
+                        builder.src_b("reg", BASE_REG + op.dst as u64, false);
+                        builder.store("reg", op.dst as i64, false, false);
+                        builder.op(arith_op);
+                        builder.i
+                    },
+                ]
+            } else {
+                // self.reg[dst] =  self.reg[dst].wrapping_sub(insn.imm as u64)
+                vec![
+                    {
+                        let mut builder = ZiskInstBuilder::new(pc);
+                        builder.src_a("reg", BASE_REG + op.dst as u64, false);
+                        builder.src_b("imm", op.imm as u64, false);
+                        builder.store("reg", op.dst as i64, false, false);
+                        builder.op(arith_op);
+                        builder.i
+                    },
+                ]
+            },
 
             // BPF opcode: `xor32 dst, src` /// `dst ^= src`.
             // BPF opcode: `or32 dst, src` /// `dst |= src`.
             // BPF opcode: `and32 dst, src` /// `dst &= src`.
-            OR32_REG | XOR32_REG | AND32_REG => vec![],
+            OR32_REG | XOR32_REG | AND32_REG => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("imm", mask, false);
+                    builder.src_b("reg", BASE_REG + op.src as u64, false);
+                    builder.op("and");
+                    builder.i
+                },
+                {
+                    let mut builder = ZiskInstBuilder::new(pc + 1);
+                    builder.src_a("imm", mask, false);
+                    builder.src_b("reg", BASE_REG + op.dst as u64, false);
+                    builder.op("and");
+                    builder.i
+                },
+                {
+                    let mut builder = ZiskInstBuilder::new(pc + 2);
+                    builder.src_a("reg", BASE_REG + op.dst as u64, false);
+                    builder.src_b("reg", BASE_REG + op.src as u64, false);
+                    builder.store("reg", op.dst as i64, false, false);
+                    builder.op(arith_op);
+                    builder.i
+                }
+            ],
+
             // BPF opcode: `or32 dst, imm` /// `dst |= imm`.
             // BPF opcode: `and32 dst, imm` /// `dst &= imm`.
             // BPF opcode: `xor32 dst, imm` /// `dst ^= imm`.
-            XOR32_IMM | AND32_IMM | OR32_IMM => vec![],
+            XOR32_IMM | AND32_IMM | OR32_IMM => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("imm", mask, false);
+                    builder.src_b("reg", BASE_REG + op.dst as u64, false);
+                    builder.op("and");
+                    builder.i
+                },
+                {
+                    let mut builder = ZiskInstBuilder::new(pc + 1);
+                    builder.src_a("imm", op.imm as u64 & mask, false);
+                    builder.src_b("reg", BASE_REG + op.src as u64, false);
+                    builder.store("reg", op.dst as i64, false, false);
+                    builder.op(arith_op);
+                    builder.i
+                }
+            ],
 
 
             // BPF opcode: `lmul32 dst, src` /// `dst *= (dst * src) as u32`.
@@ -357,6 +429,8 @@ impl ZiskRom {
             /// BPF opcode: `shmul32 dst, src` /// `dst = (dst * src) as i64`.
             // SHMUL32_REG
 
+            // BPF opcode: `mov64 dst, src` /// `dst = src`.
+            MOV64_REG
             // BPF opcode: `mov64 dst, imm` /// `dst = imm`.
             MOV64_IMM
             // BPF opcode: `mov32 dst, imm` /// `dst = imm`.
