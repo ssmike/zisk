@@ -56,7 +56,7 @@ use sbpf_elf_parser::ProcessedElf;
 const BASE_REG: u64 = 4;
 const STORE_REG: u64 = BASE_REG + 12;
 const SCRATCH_REG: u64 = STORE_REG + 12;
-const TRANSPILE_ALIGN: u64 = 8;
+const TRANSPILE_ALIGN: i32 = 8;
 
 /// Unlike the original is sbpf's instruction translating container 
 #[derive(Debug, Clone, Default)]
@@ -195,6 +195,7 @@ impl ZiskRom {
                         builder.src_b("reg", reg_for_bpf_reg(op.src), false);
                         builder.store("reg", SCRATCH_REG as i64, false, false);
                         builder.op("copyb");
+                        builder.j(1, 1);
                         builder.i
                     },
                     {
@@ -203,6 +204,7 @@ impl ZiskRom {
                         builder.src_b("reg", (-op.off).try_into().unwrap(), false);
                         builder.store("reg", SCRATCH_REG as i64, false, false);
                         builder.op("sub");
+                        builder.j(1, 1);
                         builder.i
                     },
                     {
@@ -212,6 +214,7 @@ impl ZiskRom {
                         builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                         builder.op("copyb");
                         builder.ind_width(width);
+                        builder.j(TRANSPILE_ALIGN - 2, TRANSPILE_ALIGN - 2);
                         builder.i
                     }
                 ]
@@ -224,6 +227,7 @@ impl ZiskRom {
                         builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                         builder.op("copyb");
                         builder.ind_width(width);
+                        builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                         builder.i
                     }
                 ]
@@ -241,6 +245,7 @@ impl ZiskRom {
                     builder.store("ind", op.off.into(), false, false);
                     builder.op("copyb");
                     builder.ind_width(width);
+                    builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                     builder.i
                 },
             ],
@@ -257,6 +262,7 @@ impl ZiskRom {
                     builder.store("ind", op.off.into(), false, false);
                     builder.op("copyb");
                     builder.ind_width(width);
+                    builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                     builder.i
                 },
             ],
@@ -298,6 +304,7 @@ impl ZiskRom {
                     builder.src_b("imm", op.imm as u64, false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op(arith_op);
+                    builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                     builder.i
                 },
             ],
@@ -344,6 +351,7 @@ impl ZiskRom {
                     builder.src_b("reg", reg_for_bpf_reg(op.src), false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op(arith_op);
+                    builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                     builder.i
                 },
             ],
@@ -359,6 +367,7 @@ impl ZiskRom {
                         builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
                         builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                         builder.op(arith_op);
+                        builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                         builder.i
                     },
                 ]
@@ -371,6 +380,7 @@ impl ZiskRom {
                         builder.src_b("imm", op.imm as u64, false);
                         builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                         builder.op(arith_op);
+                        builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                         builder.i
                     },
                 ]
@@ -387,6 +397,7 @@ impl ZiskRom {
                     builder.src_b("reg", reg_for_bpf_reg(op.src), false);
                     builder.store("reg", ireg_for_bpf_reg(op.src), false, false);
                     builder.op("and");
+                    builder.j(1, 1);
                     builder.i
                 },
                 {
@@ -395,6 +406,7 @@ impl ZiskRom {
                     builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("and");
+                    builder.j(1, 1);
                     builder.i
                 },
                 {
@@ -403,6 +415,7 @@ impl ZiskRom {
                     builder.src_b("reg", reg_for_bpf_reg(op.src), false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op(arith_op);
+                    builder.j(1, 1);
                     builder.i
                 },
                 {
@@ -411,6 +424,7 @@ impl ZiskRom {
                     builder.src_b("imm", mask, false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("and");
+                    builder.j(TRANSPILE_ALIGN - 3, TRANSPILE_ALIGN - 3);
                     builder.i
                 }
             ],
@@ -426,6 +440,7 @@ impl ZiskRom {
                     builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("and");
+                    builder.j(1, 1);
                     builder.i
                 },
                 {
@@ -434,6 +449,7 @@ impl ZiskRom {
                     builder.src_b("reg", reg_for_bpf_reg(op.src), false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op(arith_op);
+                    builder.j(1, 1);
                     builder.i
                 },
                 {
@@ -442,6 +458,7 @@ impl ZiskRom {
                     builder.src_b("imm", mask, false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("and");
+                    builder.j(TRANSPILE_ALIGN - 2, TRANSPILE_ALIGN - 2);
                     builder.i
                 }
             ],
@@ -454,6 +471,7 @@ impl ZiskRom {
                     builder.src_b("imm", (op.imm as u64).wrapping_shl(32), false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("or");
+                    builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                     builder.i
                 }
             ],
@@ -471,6 +489,7 @@ impl ZiskRom {
                     builder.src_b("reg", reg_for_bpf_reg(op.src), false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("copyb");
+                    builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                     builder.i
                 }
             ],
@@ -482,6 +501,7 @@ impl ZiskRom {
                     builder.src_b("imm", op.imm as u64, false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("copyb");
+                    builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                     builder.i
                 }
             ],
@@ -493,6 +513,7 @@ impl ZiskRom {
                     builder.src_b("imm", op.imm as u64 & mask, false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("copyb");
+                    builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                     builder.i
                 }
             ],
@@ -505,6 +526,7 @@ impl ZiskRom {
                     builder.src_b("reg", reg_for_bpf_reg(op.src), false);
                     builder.store("reg", ireg_for_bpf_reg(op.src), false, false);
                     builder.op("and");
+                    builder.j(1, 1);
                     builder.i
                 },
                 {
@@ -512,6 +534,7 @@ impl ZiskRom {
                     builder.src_b("reg", reg_for_bpf_reg(op.src), false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op("copyb");
+                    builder.j(TRANSPILE_ALIGN - 1, TRANSPILE_ALIGN - 1);
                     builder.i
                 }
             ],
@@ -520,70 +543,219 @@ impl ZiskRom {
             // BPF opcode: `neg64 dst` /// `dst = -dst`.
             NEG32 | NEG64 => vec![
                 {
-                    let mut builder = ZiskInstBuilder::new(pc + 1);
+                    let mut builder = ZiskInstBuilder::new(pc);
                     builder.src_a("imm", 0, false);
                     builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
                     builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
                     builder.op(if op.opc == NEG32 { "sub_w" } else { "sub" });
+                    builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN);
                     builder.i
                 }
             ],
 
-            // BPF opcode: `le dst` /// `dst = htole<imm>(dst), with imm in {16, 32, 64}`.
-            LE
-            // BPF opcode: `be dst` /// `dst = htobe<imm>(dst), with imm in {16, 32, 64}`.
-            BE
             // BPF opcode: `ja +off` /// `PC += off`.
-            JA
+            JA => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("imm", 0, false);
+                    builder.src_b("imm", 0, false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op("flag");
+                    builder.j(TRANSPILE_ALIGN as i32 * op.off as i32, TRANSPILE_ALIGN as i32 * op.off as i32);
+                    builder.i
+                }
+            ],
+
+
             // BPF opcode: `jeq dst, imm, +off` /// `PC += off if dst == imm`.
-            JEQ_IMM
-            // BPF opcode: `jeq dst, src, +off` /// `PC += off if dst == src`.
-            JEQ_REG
-            // BPF opcode: `jgt dst, imm, +off` /// `PC += off if dst > imm`.
-            JGT_IMM
-            // BPF opcode: `jgt dst, src, +off` /// `PC += off if dst > src`.
-            JGT_REG
-            // BPF opcode: `jge dst, imm, +off` /// `PC += off if dst >= imm`.
-            JGE_IMM
-            // BPF opcode: `jge dst, src, +off` /// `PC += off if dst >= src`.
-            JGE_REG
-            // BPF opcode: `jlt dst, imm, +off` /// `PC += off if dst < imm`.
-            JLT_IMM
-            // BPF opcode: `jlt dst, src, +off` /// `PC += off if dst < src`.
-            JLT_REG
-            // BPF opcode: `jle dst, imm, +off` /// `PC += off if dst <= imm`.
-            JLE_IMM
-            // BPF opcode: `jle dst, src, +off` /// `PC += off if dst <= src`.
-            JLE_REG
-            // BPF opcode: `jset dst, imm, +off` /// `PC += off if dst & imm`.
-            JSET_IMM
-            // BPF opcode: `jset dst, src, +off` /// `PC += off if dst & src`.
-            JSET_REG
             // BPF opcode: `jne dst, imm, +off` /// `PC += off if dst != imm`.
-            JNE_IMM
+            JNE_IMM | JEQ_IMM => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.src_b("imm", op.imm as u64, false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op("eq");
+                    if op.opc & BPF_JNE != 0 {
+                        builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN * (op.off as i32 + 1));
+                    } else {
+                        builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    }
+                    builder.i
+                }
+            ],
+            // BPF opcode: `jeq dst, src, +off` /// `PC += off if dst == src`.
             // BPF opcode: `jne dst, src, +off` /// `PC += off if dst != src`.
-            JNE_REG
+            JNE_REG | JEQ_REG => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("reg", reg_for_bpf_reg(op.src), false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op("eq");
+                    if op.opc & BPF_JNE != 0 {
+                        builder.j(TRANSPILE_ALIGN, TRANSPILE_ALIGN * (op.off as i32 + 1));
+                    } else {
+                        builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    }
+                    builder.i
+                }
+            ],
+
+            // BPF opcode: `jgt dst, imm, +off` /// `PC += off if dst > imm`.
             // BPF opcode: `jsgt dst, imm, +off` /// `PC += off if dst > imm (signed)`.
-            JSGT_IMM
+            JSGT_IMM | JGT_IMM => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("imm", op.imm as u64, false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op(if op.opc == JSGT_IMM {"lt"} else {"ltu"});
+                    builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    builder.i
+                }
+            ],
+            // BPF opcode: `jgt dst, src, +off` /// `PC += off if dst > src`.
             // BPF opcode: `jsgt dst, src, +off` /// `PC += off if dst > src (signed)`.
-            JSGT_REG
-            // BPF opcode: `jsge dst, imm, +off` /// `PC += off if dst >= imm (signed)`.
-            JSGE_IMM
-            // BPF opcode: `jsge dst, src, +off` /// `PC += off if dst >= src (signed)`.
-            JSGE_REG
+            JSGT_REG | JGT_REG => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("reg", reg_for_bpf_reg(op.src), false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op(if op.opc == JSGT_REG {"lt"} else {"ltu"});
+                    builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    builder.i
+                }
+            ],
+            // BPF opcode: `jlt dst, imm, +off` /// `PC += off if dst < imm`.
             // BPF opcode: `jslt dst, imm, +off` /// `PC += off if dst < imm (signed)`.
-            JSLT_IMM
+            JSLT_IMM | JLT_IMM => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.src_b("imm", op.imm as u64, false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op(if op.opc == JSLT_IMM {"lt"} else {"ltu"});
+                    builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    builder.i
+                }
+            ],
+            // BPF opcode: `jlt dst, src, +off` /// `PC += off if dst < src`.
             // BPF opcode: `jslt dst, src, +off` /// `PC += off if dst < src (signed)`.
-            JSLT_REG
+            JSLT_REG | JLT_REG => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.src), false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op(if op.opc == JSLT_REG {"lt"} else {"ltu"});
+                    builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    builder.i
+                }
+            ],
+
+            // BPF opcode: `jge dst, imm, +off` /// `PC += off if dst >= imm`.
+            // BPF opcode: `jsge dst, imm, +off` /// `PC += off if dst >= imm (signed)`.
+            JSGE_IMM | JGE_IMM => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("imm", op.imm as u64, false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op(if op.opc == JSGE_IMM {"le"} else {"leu"});
+                    builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    builder.i
+                }
+            ],
+            // BPF opcode: `jge dst, src, +off` /// `PC += off if dst >= src`.
+            // BPF opcode: `jsge dst, src, +off` /// `PC += off if dst >= src (signed)`.
+            JSGE_REG | JGE_REG => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("reg", reg_for_bpf_reg(op.src), false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op(if op.opc == JSGE_REG {"le"} else {"leu"});
+                    builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    builder.i
+                }
+            ],
+
+            // BPF opcode: `jle dst, imm, +off` /// `PC += off if dst <= imm`.
             // BPF opcode: `jsle dst, imm, +off` /// `PC += off if dst <= imm (signed)`.
-            JSLE_IMM
+            JSLE_IMM | JLE_IMM => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.src_b("imm", op.imm as u64, false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op(if op.opc == JSLE_IMM {"le"} else {"leu"});
+                    builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    builder.i
+                }
+            ],
+            // BPF opcode: `jle dst, src, +off` /// `PC += off if dst <= src`.
             // BPF opcode: `jsle dst, src, +off` /// `PC += off if dst <= src (signed)`.
-            JSLE_REG
+            JSLE_REG | JLE_REG => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.src_b("reg", reg_for_bpf_reg(op.src), false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op(if op.opc == JSLE_REG {"le"} else {"leu"});
+                    builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    builder.i
+                }
+            ],
+            
+            // BPF opcode: `jset dst, imm, +off` /// `PC += off if dst & imm`.
+            // BPF opcode: `jset dst, src, +off` /// `PC += off if dst & src`.
+            JSET_REG | JSET_IMM => vec![
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    if op.opc == JSET_REG {
+                        builder.src_a("reg", reg_for_bpf_reg(op.src), false);
+                    } else {
+                        builder.src_a("imm", op.imm as u64, false);
+                    }
+                    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                    builder.op("and");
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.i
+                },
+                {
+                    let mut builder = ZiskInstBuilder::new(pc);
+                    builder.src_a("reg", SCRATCH_REG, false);
+                    builder.src_b("imm", 0, false);
+                    builder.store("reg", SCRATCH_REG as i64, false, false);
+                    builder.op("eq");
+                    builder.j(TRANSPILE_ALIGN * (op.off as i32 + 1), TRANSPILE_ALIGN);
+                    builder.i
+                }
+            ],
+
+
+
+
+            // BPF opcode: `le dst` /// `dst = htole<imm>(dst), with imm in {16, 32, 64}`.
+            LE => vec![
+                //{
+                //    let mut builder = ZiskInstBuilder::new(pc + 1);
+                //    builder.src_a("imm", match op.imm {16 => (1_u64 << 16) - 1, 32 => (1_u64 << 32) - 1, 64 => !0_u64}, false);
+                //    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
+                //    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
+                //    builder.op("and");
+                //    builder.i
+                //}
+            ],
+            // BPF opcode: `be dst` /// `dst = htobe<imm>(dst), with imm in {16, 32, 64}`.
+            BE => vec![],
 
             // BPF opcode: `call imm` /// syscall function call to syscall with key `imm`.
-            CALL_IMM
+            CALL_IMM => vec![],
             // BPF opcode: tail call.
-            CALL_REG
+            CALL_REG => vec![],
             // BPF opcode: `exit` /// `return r0`. /// Valid only until SBPFv3
             EXIT
             // BPF opcode: `return` /// `return r0`. /// Valid only since SBPFv3
