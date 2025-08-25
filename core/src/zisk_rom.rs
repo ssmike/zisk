@@ -56,7 +56,8 @@ use sbpf_elf_parser::ProcessedElf;
 const BASE_REG: u64 = 4;
 const STORE_REG: u64 = BASE_REG + 12;
 const SCRATCH_REG: u64 = STORE_REG + 12;
-const TRANSPILE_ALIGN: i32 = 8;
+const SCRATCH_REG2: u64 = SCRATCH_REG + 1;
+const TRANSPILE_ALIGN: i32 = 16;
 
 /// Unlike the original is sbpf's instruction translating container 
 #[derive(Debug, Clone, Default)]
@@ -739,18 +740,108 @@ impl ZiskRom {
 
 
             // BPF opcode: `le dst` /// `dst = htole<imm>(dst), with imm in {16, 32, 64}`.
-            LE => vec![
-                //{
-                //    let mut builder = ZiskInstBuilder::new(pc + 1);
-                //    builder.src_a("imm", match op.imm {16 => (1_u64 << 16) - 1, 32 => (1_u64 << 32) - 1, 64 => !0_u64}, false);
-                //    builder.src_b("reg", reg_for_bpf_reg(op.dst), false);
-                //    builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
-                //    builder.op("and");
-                //    builder.i
-                //}
-            ],
             // BPF opcode: `be dst` /// `dst = htobe<imm>(dst), with imm in {16, 32, 64}`.
-            BE => vec![],
+            LE | BE => if {
+                #[cfg(target_endian = "little")]
+                {
+                    op.opc == BE
+                }
+                #[cfg(not(target_endian = "little"))]
+                {
+                    op.opc == LE
+                }
+            } {
+                // swapping bytes
+                // we do it in 3 passes
+                let bytes = 8;
+                let steps_count = 3;
+                let shifts = vec![32, 16, 8];
+                let swap_masks = {
+                    let mut masks = vec![];
+
+                    for shift in shifts.as_slice() {
+                        let mut mask = 0;
+                        let mut submask = (1_u64 << shift) - 1;
+                        for i in 0..64/(shift*2) {
+                            mask |= submask << (shift * i * 2);
+                        }
+                        let bytemask = (1 << op.imm) - 1;
+                        let to_swap_1 = mask & bytemask;
+                        let to_swap_2 = !mask & bytemask;
+                        masks.push((to_swap_1, to_swap_2));
+                    }
+
+                    masks
+                };
+
+
+
+
+                let mut pc = pc;
+                (0..steps_count).flat_map(|pass| if shifts[pass] > op.imm {
+                    vec![]
+                } else {
+                    vec![
+                        {
+                            let mut builder = ZiskInstBuilder::new(pc);
+                            pc += 1;
+                            builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                            builder.src_b("imm", swap_masks[pass].0, false);
+                            builder.op("and");
+                            builder.store("reg", SCRATCH_REG as i64, false, false);
+                            builder.j(1, 1);
+                            builder.i
+                        },
+                        {
+                            let mut builder = ZiskInstBuilder::new(pc);
+                            pc += 1;
+                            builder.src_a("reg", reg_for_bpf_reg(op.dst), false);
+                            builder.src_b("imm", swap_masks[pass].1, false);
+                            builder.op("and");
+                            builder.store("reg", SCRATCH_REG2 as i64, false, false);
+                            builder.j(1, 1);
+                            builder.i
+                        },
+                        {
+                            let mut builder = ZiskInstBuilder::new(pc);
+                            pc += 1;
+                            builder.src_a("reg", SCRATCH_REG, false);
+                            builder.src_b("imm", shifts[pass] as u64, false);
+                            builder.op("sll");
+                            builder.store("reg", SCRATCH_REG as i64, false, false);
+                            builder.j(1, 1);
+                            builder.i
+                        },
+                        {
+                            let mut builder = ZiskInstBuilder::new(pc);
+                            pc += 1;
+                            builder.src_a("reg", SCRATCH_REG2, false);
+                            builder.src_b("imm", shifts[pass] as u64, false);
+                            builder.op("srl");
+                            builder.store("reg", SCRATCH_REG2 as i64, false, false);
+                            builder.j(1, 1);
+                            builder.i
+                        },
+                        {
+                            let mut builder = ZiskInstBuilder::new(pc);
+                            builder.src_a("reg", SCRATCH_REG, false);
+                            builder.src_b("reg", SCRATCH_REG2, false);
+                            builder.op("or");
+                            builder.store("reg", ireg_for_bpf_reg(op.dst), false, false);
+                            if pass + 1 == steps_count {
+                                let align = TRANSPILE_ALIGN as u64;
+                                let jump = (align - (pc % align)) as i32;
+                                builder.j(jump, jump);
+                            } else {
+                                builder.j(1, 1);
+                            }
+                            builder.i
+                        }
+                    ]
+                }).collect()
+            } else {
+                vec![]
+            },
 
             // BPF opcode: `call imm` /// syscall function call to syscall with key `imm`.
             CALL_IMM => vec![],
@@ -767,7 +858,7 @@ impl ZiskRom {
     }
 
     pub fn new(key: Pubkey, program: ProcessedElf) -> Self {
-        let transpiled_instructions = program.all_lines.as_slice().iter().map(|op| Self::transpile_op(op, op.ptr as u64 * TRANSPILE_ALIGN, &program.sbpf_version)).collect();
+        let transpiled_instructions = program.all_lines.as_slice().iter().map(|op| Self::transpile_op(op, op.ptr as u64 * TRANSPILE_ALIGN as u64, &program.sbpf_version)).collect();
         Self {
             key,
             program,
@@ -785,8 +876,9 @@ impl ZiskRom {
 
         // If the address is a program address...
         if pc >= ROM_ADDR {
-            let line = (pc - ROM_ADDR) / TRANSPILE_ALIGN;
-            let index = (pc - ROM_ADDR) % TRANSPILE_ALIGN;
+            let align = TRANSPILE_ALIGN as u64;
+            let line = (pc - ROM_ADDR) / align;
+            let index = (pc - ROM_ADDR) % align;
 
             &self.transpiled_instructions[line as usize][index as usize]
         } else if pc >= ROM_ENTRY {
